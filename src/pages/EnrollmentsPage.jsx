@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { generateEnrollmentReceipt } from "@/utils/receiptGenerator";
+import { sendEnrollmentConfirmationEmail } from "@/utils/emailSender";
 
 export default function EnrollmentsPage() {
   const [enrollments, setEnrollments] = useState([]);
@@ -10,6 +11,7 @@ export default function EnrollmentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [downloading, setDownloading] = useState(null);
+  const [validating, setValidating] = useState(null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -53,6 +55,33 @@ export default function EnrollmentsPage() {
       setError("Erreur lors de la génération du PDF: " + (e.message || ""));
     } finally {
       setDownloading(null);
+    }
+  }
+
+  async function handleValidate(enrollment) {
+    const student = students[enrollment.student_id];
+    if (!student?.email) {
+      setError("Impossible d'envoyer l'email : l'élève n'a pas d'adresse email.");
+      return;
+    }
+    setValidating(enrollment.id);
+    try {
+      const updated = await base44.entities.Enrollment.update(enrollment.id, {
+        status: "confirmée",
+      });
+      setEnrollments((prev) =>
+        prev.map((e) => (e.id === enrollment.id ? { ...e, ...updated } : e))
+      );
+      await sendEnrollmentConfirmationEmail({
+        enrollment: { ...enrollment, status: "confirmée" },
+        student,
+        classe: classes[enrollment.class_id],
+        schoolYear: schoolYears[enrollment.school_year_id],
+      });
+    } catch (e) {
+      setError("Erreur lors de la validation : " + (e.message || ""));
+    } finally {
+      setValidating(null);
     }
   }
 
@@ -121,13 +150,24 @@ export default function EnrollmentsPage() {
                   {enr.status}
                 </span>
               </div>
-              <button
-                onClick={() => handleDownload(enr)}
-                disabled={downloading === enr.id}
-                className="shrink-0 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
-              >
-                {downloading === enr.id ? "Génération..." : "Télécharger le reçu"}
-              </button>
+              <div className="shrink-0 flex flex-col gap-2 sm:flex-row">
+                {enr.status !== "confirmée" && (
+                  <button
+                    onClick={() => handleValidate(enr)}
+                    disabled={validating === enr.id}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {validating === enr.id ? "Validation..." : "Valider"}
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDownload(enr)}
+                  disabled={downloading === enr.id}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {downloading === enr.id ? "Génération..." : "Télécharger le reçu"}
+                </button>
+              </div>
             </div>
           );
         })}
