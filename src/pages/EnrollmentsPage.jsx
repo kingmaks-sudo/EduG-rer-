@@ -10,6 +10,7 @@ export default function EnrollmentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [downloading, setDownloading] = useState(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -55,6 +56,18 @@ export default function EnrollmentsPage() {
     }
   }
 
+  const filtered = enrollments.filter((enr) => {
+    const student = students[enr.student_id];
+    const classe = classes[enr.class_id];
+    const haystack = [
+      student ? `${student.last_name} ${student.first_name}` : "",
+      classe?.name || "",
+      enr.enrollment_type || "",
+      enr.status || "",
+    ].join(" ").toLowerCase();
+    return haystack.includes(search.toLowerCase());
+  });
+
   if (loading)
     return <p className="text-center text-gray-500 py-8">Chargement...</p>;
   if (error)
@@ -68,8 +81,15 @@ export default function EnrollmentsPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-4">Inscriptions</h1>
+      <input
+        type="text"
+        placeholder="Rechercher une inscription..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="w-full mb-4 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+      />
       <div className="space-y-3">
-        {enrollments.map((enr) => {
+        {filtered.map((enr) => {
           const student = students[enr.student_id];
           const classe = classes[enr.class_id];
           const sy = schoolYears[enr.school_year_id];
@@ -111,7 +131,7 @@ export default function EnrollmentsPage() {
             </div>
           );
         })}
-        {enrollments.length === 0 && (
+        {filtered.length === 0 && (
           <p className="text-center text-gray-500 py-8">Aucune inscription trouvée</p>
         )}
       </div>
